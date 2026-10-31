@@ -1,0 +1,72 @@
+version: '3.8'
+
+services:
+  frontend:
+    environment:
+      REACT_APP_API_URL: https://yourdomain.com/api
+    restart: unless-stopped
+
+  backend:
+    environment:
+      NODE_ENV: production
+      LOG_LEVEL: error
+      PORT: 3000
+      MONGODB_URI: mongodb://mongo:27017/todoapp
+      REDIS_URL: redis://redis:6379
+      CORS_ORIGIN: https://yourdomain.com
+      MAX_FILE_SIZE: 5242880
+      UPLOAD_DIR: /app/uploads
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+  mongo:
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD_FILE: /run/secrets/mongo_password
+    secrets:
+      - mongo_password
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    restart: unless-stopped
+
+  redis:
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+
+  nginx:
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./nginx/nginx-ssl.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    restart: unless-stopped
+
+secrets:
+  mongo_password:
+    file: ./secrets/mongo_password.txt

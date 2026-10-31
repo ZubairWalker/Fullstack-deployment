@@ -1,0 +1,106 @@
+version: '3.8'
+
+services:
+  frontend:
+    build:
+      context: ./frontend
+    container_name: todo-frontend
+    environment:
+      REACT_APP_API_URL: http://localhost:8081/api
+    depends_on:
+      - backend
+    networks:
+      - frontend-network
+      - backend-network
+
+  backend:
+    build:
+      context: ./backend
+    container_name: todo-backend
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      MONGODB_URI: mongodb://mongo:27017/todoapp
+      REDIS_URL: redis://redis:6379
+      CORS_ORIGIN: http://localhost:8081
+      MAX_FILE_SIZE: 5242880
+      LOG_LEVEL: info
+      UPLOAD_DIR: /app/uploads
+    volumes:
+      - ./backend/uploads:/app/uploads
+      - ./backend/logs:/app/logs
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - '3000:3000'
+    networks:
+      - frontend-network
+      - backend-network
+
+  mongo:
+    image: mongo:6
+    container_name: todo-mongo
+    command: ['mongod', '--bind_ip_all']
+    environment:
+      MONGO_INITDB_DATABASE: todoapp
+    ports:
+      - '27017:27017'
+    volumes:
+      - mongo-data:/data/db
+      - ./mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
+    healthcheck:
+      test: ['CMD', 'mongosh', '--quiet', '--eval', "db.runCommand({ ping: 1 }).ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - backend-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: todo-redis
+    command: ['redis-server', '--appendonly', 'yes']
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - backend-network
+
+  nginx:
+    image: nginx:alpine
+    container_name: todo-nginx
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - '8081:80'
+    depends_on:
+      - frontend
+      - backend
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://localhost/health']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    networks:
+      - frontend-network
+      - backend-network
+
+networks:
+  frontend-network:
+    driver: bridge
+  backend-network:
+    driver: bridge
+
+volumes:
+  mongo-data:
+  redis-data:

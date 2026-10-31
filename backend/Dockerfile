@@ -1,0 +1,15 @@
+FROM node:20-alpine AS deps
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --include=dev
+
+FROM node:20-alpine
+WORKDIR /app
+RUN apk add --no-cache dumb-init && mkdir -p /app/uploads /app/logs && chown -R node:node /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+USER node
+EXPOSE 3000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 CMD node -e "fetch('http://localhost:3000/health').then((res) => process.exit(res.ok ? 0 : 1)).catch(() => process.exit(1))"
+ENTRYPOINT ["dumb-init", "--"]
+CMD ["node", "src/app.js"]
